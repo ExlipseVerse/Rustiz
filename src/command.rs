@@ -1,7 +1,17 @@
+use std::net::TcpStream;
+use std::io::Write;
+
 pub enum Command {
 	Get(String),
 	Set(String, String),
 	Delete(String),
+}
+
+pub enum Response {
+	Value(String),
+	Ok,
+	NotFound,
+	Error(String),
 }
 
 pub fn parse(input: &str) -> Result<Command, String> {
@@ -41,4 +51,28 @@ pub fn parse(input: &str) -> Result<Command, String> {
 
 		_ => Err("Invalid command".to_string())
 	}
+}
+
+pub fn write_response(stream: &mut TcpStream,response: Response) -> std::io::Result<()> {
+	match response {
+		Response::Value(value) => {
+			let response = format!("Value: {}\n", value);
+			stream.write_all(response.as_bytes())?;
+		}
+
+		Response::Ok => {
+			stream.write_all(b"OK\n")?;
+		}
+
+		Response::NotFound => {
+			stream.write_all(b"ERROR: Key not found\n")?;
+		}
+
+		Response::Error(e) => {
+			let response = format!("ERROR: {}\n", e);
+			stream.write_all(response.as_bytes())?;
+		}
+	}
+
+	Ok(())
 }
