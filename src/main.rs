@@ -1,7 +1,7 @@
 mod store;
 mod command;
 
-use command::{Command, Response, parse};
+use command::{Command, Response, decode_input};
 
 use std::net::{TcpListener, TcpStream};
 use std::io::{Read};
@@ -62,35 +62,59 @@ fn handle_client(mut stream: TcpStream, shared_store: Arc<Mutex<Store>>) {
                 buffer.extend_from_slice(recieved);
                 println!("{:?}", recieved);
 
-                while let Some(pos) = buffer.iter().position(|&b| b == b'\n') {
-                    let cmd_bytes = buffer.drain(..=pos).collect::<Vec<_>>();
-                    let input = String::from_utf8_lossy(&cmd_bytes);
-
-                    let command = parse(&input);
-                    match command {
-                        Ok(command) => {
+                loop {
+                    match decode_input(&mut buffer) {
+                        Ok(Some(cmd)) => {
                             let store_clone = Arc::clone(&shared_store);
-                            let response = handle_command(command, store_clone);
+                            let response = handle_command(cmd, store_clone);
 
                             if let Err(e) = write_response(&mut stream, response) {
                                 eprintln!("Failed to write response: {}", e);
-                                break;
+                                return;
                             }
                         }
 
+                        Ok(None) => {
+                            break;
+                        }
+
                         Err(e) => {
+                            eprintln!("Protocol error: {}", e);
                             let response = Response::Error(e);
 
                             if let Err(e) = write_response(&mut stream, response) {
                                 eprintln!("Failed to write response: {}", e);
-                                break;
+                                
                             }
+
+                            return;
                         }
                     }
-
-                    // let parts: Vec<&str> = command.split_whitespace().collect();
-                    
                 }
+
+                // while let Some(pos) = buffer.iter().position(|&b| b == b'\n') {
+                //     let cmd_bytes = buffer.drain(..=pos).collect::<Vec<_>>();
+                //     let input = String::from_utf8_lossy(&cmd_bytes);
+
+                //     let command = parse(&input);
+                //     match command {
+                //         Ok(command) => {
+                //             
+                //         }
+
+                //         Err(e) => {
+                //             let response = Response::Error(e);
+
+                //             if let Err(e) = write_response(&mut stream, response) {
+                //                 eprintln!("Failed to write response: {}", e);
+                //                 break;
+                //             }
+                //         }
+                //     }
+
+                //     // let parts: Vec<&str> = command.split_whitespace().collect();
+                    
+                // }
                 // if let Err(e) = stream.write_all(b"successfull!") {
                 //     eprint!("failed to write to client: {}", e);
                 //     break;
